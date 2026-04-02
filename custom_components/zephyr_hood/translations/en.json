@@ -1,0 +1,93 @@
+{
+  "title": "Zephyr Range Hood",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to your Zephyr account",
+        "description": "Enter the credentials you use in the Zephyr mobile app.",
+        "data": {
+          "username": "Email address",
+          "password": "Password"
+        },
+        "data_description": {
+          "username": "The email address you registered with in the Zephyr app.",
+          "password": "Your Zephyr account password."
+        }
+      },
+      "device": {
+        "title": "Select your range hood",
+        "data": {
+          "thing_name": "Device"
+        },
+        "data_description": {
+          "thing_name": "Select the range hood you want to add to Home Assistant."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate with Zephyr",
+        "description": "Your session has expired. Please re-enter your password.",
+        "data": {
+          "password": "Password"
+        }
+      },
+      "reconfigure": {
+        "title": "Update Zephyr credentials",
+        "data": {
+          "username": "Email address",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to the Zephyr cloud. Please check your internet connection and try again.",
+      "invalid_auth": "Invalid email address or password. Please check your credentials and try again.",
+      "no_devices": "No Zephyr range hoods found on this account. Make sure your hood is registered in the Zephyr app."
+    },
+    "abort": {
+      "already_configured": "This range hood is already set up in Home Assistant.",
+      "reauth_successful": "Re-authentication was successful.",
+      "reconfigure_successful": "Configuration updated successfully."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Backend overrides",
+        "description": "These values are compiled in from reverse-engineering the Zephyr app and are the same for all users. Only change them if Zephyr has updated their backend infrastructure.",
+        "data": {
+          "iot_endpoint": "AWS IoT endpoint",
+          "gemteks_base_url": "Gemteks API base URL",
+          "cognito_user_pool_id": "Cognito User Pool ID",
+          "cognito_client_id": "Cognito App Client ID",
+          "cognito_client_secret": "Cognito App Client Secret",
+          "cognito_identity_pool_id": "Cognito Identity Pool ID"
+        },
+        "data_description": {
+          "iot_endpoint": "AWS IoT Core hostname used for MQTT device control.",
+          "gemteks_base_url": "Base URL for the Gemteks REST API (device discovery and status).",
+          "cognito_user_pool_id": "AWS Cognito User Pool ID (e.g. us-west-2_XXXXXXXXX).",
+          "cognito_client_id": "AWS Cognito App Client ID.",
+          "cognito_client_secret": "AWS Cognito App Client Secret.",
+          "cognito_identity_pool_id": "AWS Cognito Identity Pool ID for obtaining temporary AWS credentials."
+        }
+      }
+    }
+  },
+  "entity": {
+    "fan": {
+      "fan": {
+        "name": "Fan"
+      }
+    },
+    "light": {
+      "light": {
+        "name": "Light"
+      }
+    },
+    "switch": {
+      "power": {
+        "name": "Power"
+      }
+    }
+  }
+}

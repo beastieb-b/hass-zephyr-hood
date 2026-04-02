@@ -1,0 +1,20 @@
+{
+  "domain": "zephyr_hood",
+  "name": "Zephyr Range Hood",
+  "codeowners": ["@Dresdn"],
+  "config_flow": true,
+  "documentation": "https://github.com/Dresdn/hass-zephyr-hood",
+  "integration_type": "device",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/Dresdn/hass-zephyr-hood/issues",
+  "loggers": ["pycognito", "awscrt", "awsiot"],
+  "quality_scale": "bronze",
+  "requirements": [
+    "awsiotsdk>=1.28.0",
+    "boto3>=1.37.38",
+    "pycognito>=2024.5.1",
+    "niquests>=3.18.4"
+  ],
+  "single_config_entry": false,
+  "version": "1.0.0"
+}
