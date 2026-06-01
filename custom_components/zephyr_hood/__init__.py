@@ -23,10 +23,12 @@ from .const import (
     CONF_GEMTEKS_BASE_URL,
     CONF_IOT_ENDPOINT,
     CONF_PASSWORD,
+    CONF_SHADOW_COMMAND_SECTION,
     CONF_THING_NAME,
     CONF_USERNAME,
     GEMTEKS_BASE_URL,
     IOT_ENDPOINT,
+    SHADOW_COMMAND_SECTION_REPORTED,
 )
 from .coordinator import ZephyrCoordinator
 
@@ -74,6 +76,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ZephyrConfigEntry) -> bo
         cognito_identity_pool_id=entry.options.get(
             CONF_COGNITO_IDENTITY_POOL_ID, COGNITO_IDENTITY_POOL_ID
         ),
+        shadow_command_section=entry.options.get(
+            CONF_SHADOW_COMMAND_SECTION, SHADOW_COMMAND_SECTION_REPORTED
+        ),
     )
 
     try:
@@ -87,6 +92,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ZephyrConfigEntry) -> bo
 
     coordinator = ZephyrCoordinator(
         hass=hass,
+        config_entry=entry,
         client=client,
         thing_name=entry.data[CONF_THING_NAME],
     )
@@ -96,6 +102,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ZephyrConfigEntry) -> bo
 
     # Store runtime data (Gold: runtime-data)
     entry.runtime_data = ZephyrData(client=client, coordinator=coordinator)
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
@@ -103,4 +110,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ZephyrConfigEntry) -> bo
 
 async def async_unload_entry(hass: HomeAssistant, entry: ZephyrConfigEntry) -> bool:
     """Unload a config entry (Silver: config-entry-unloading)."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded:
+        await hass.async_add_executor_job(entry.runtime_data.client.close)
+    return unloaded
+
+
+async def _async_update_listener(
+    hass: HomeAssistant,
+    entry: ZephyrConfigEntry,
+) -> None:
+    """Reload the config entry when options change."""
+    await hass.config_entries.async_reload(entry.entry_id)

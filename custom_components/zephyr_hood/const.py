@@ -19,6 +19,7 @@ CONF_COGNITO_USER_POOL_ID = "cognito_user_pool_id"
 CONF_COGNITO_CLIENT_ID = "cognito_client_id"
 CONF_COGNITO_CLIENT_SECRET = "cognito_client_secret"
 CONF_COGNITO_IDENTITY_POOL_ID = "cognito_identity_pool_id"
+CONF_SHADOW_COMMAND_SECTION = "shadow_command_section"
 
 # AWS / Zephyr backend (hardcoded from reverse-engineering)
 AWS_REGION = "us-west-2"
@@ -31,6 +32,8 @@ GEMTEKS_BASE_URL = "https://zephyr-prod-app.gemteks.com/prod"
 
 # MQTT shadow topics
 TOPIC_UPDATE = "$aws/things/{thing}/shadow/update"
+TOPIC_UPDATE_ACCEPTED = "$aws/things/{thing}/shadow/update/accepted"
+TOPIC_UPDATE_REJECTED = "$aws/things/{thing}/shadow/update/rejected"
 TOPIC_GET = "$aws/things/{thing}/shadow/get"
 TOPIC_GET_ACCEPTED = "$aws/things/{thing}/shadow/get/accepted"
 TOPIC_UPDATE_DOCS = "$aws/things/{thing}/shadow/update/documents"
@@ -42,6 +45,16 @@ STATE_FAN = "fan"
 STATE_DELAY_TIMER = "setdelaytimer"
 STATE_IS_ONLINE = "isOnline"
 STATE_MODEL_NAME = "modelName"
+
+# Shadow command sections.  Zephyr devices have historically accepted commands
+# in "reported"; "desired" is available for backends that follow the standard
+# AWS IoT app/device shadow split.
+SHADOW_COMMAND_SECTION_REPORTED = "reported"
+SHADOW_COMMAND_SECTION_DESIRED = "desired"
+SHADOW_COMMAND_SECTIONS = (
+    SHADOW_COMMAND_SECTION_REPORTED,
+    SHADOW_COMMAND_SECTION_DESIRED,
+)
 
 # Light levels
 LIGHT_OFF = 0

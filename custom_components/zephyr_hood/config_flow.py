@@ -31,11 +31,14 @@ from .const import (
     CONF_MODEL_NAME,
     CONF_PASSWORD,
     CONF_SERIAL_NUMBER,
+    CONF_SHADOW_COMMAND_SECTION,
     CONF_THING_NAME,
     CONF_USERNAME,
     DOMAIN,
     GEMTEKS_BASE_URL,
     IOT_ENDPOINT,
+    SHADOW_COMMAND_SECTION_REPORTED,
+    SHADOW_COMMAND_SECTIONS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -279,6 +282,13 @@ class ZephyrOptionsFlow(OptionsFlow):
                             CONF_COGNITO_IDENTITY_POOL_ID, COGNITO_IDENTITY_POOL_ID
                         ),
                     ): str,
+                    vol.Required(
+                        CONF_SHADOW_COMMAND_SECTION,
+                        default=opts.get(
+                            CONF_SHADOW_COMMAND_SECTION,
+                            SHADOW_COMMAND_SECTION_REPORTED,
+                        ),
+                    ): vol.In(SHADOW_COMMAND_SECTIONS),
                 }
             ),
         )

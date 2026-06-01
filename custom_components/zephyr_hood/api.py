@@ -12,8 +12,9 @@ import datetime
 import json
 import logging
 import ssl
-import time
+import threading
 from typing import Any
+import uuid
 
 from awscrt import auth, io, mqtt
 from awsiot import mqtt_connection_builder
@@ -30,6 +31,8 @@ from .const import (
     COGNITO_USER_POOL_ID,
     GEMTEKS_BASE_URL,
     IOT_ENDPOINT,
+    SHADOW_COMMAND_SECTION_REPORTED,
+    SHADOW_COMMAND_SECTIONS,
     STATE_FAN,
     STATE_IS_ONLINE,
     STATE_LIGHT,
@@ -38,6 +41,8 @@ from .const import (
     TOPIC_GET,
     TOPIC_GET_ACCEPTED,
     TOPIC_UPDATE,
+    TOPIC_UPDATE_ACCEPTED,
+    TOPIC_UPDATE_REJECTED,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -107,8 +112,13 @@ class ZephyrClient:
         cognito_app_client_id: str = COGNITO_APP_CLIENT_ID,
         cognito_app_client_secret: str = COGNITO_APP_CLIENT_SECRET,
         cognito_identity_pool_id: str = COGNITO_IDENTITY_POOL_ID,
+        shadow_command_section: str = SHADOW_COMMAND_SECTION_REPORTED,
     ) -> None:
         """Initialize the client with Cognito user credentials."""
+        if shadow_command_section not in SHADOW_COMMAND_SECTIONS:
+            raise ValueError(
+                f"Unsupported shadow command section: {shadow_command_section}"
+            )
         self._username = username
         self._password = password
         self._iot_endpoint = iot_endpoint
@@ -117,6 +127,7 @@ class ZephyrClient:
         self._cognito_app_client_id = cognito_app_client_id
         self._cognito_app_client_secret = cognito_app_client_secret
         self._cognito_identity_pool_id = cognito_identity_pool_id
+        self._shadow_command_section = shadow_command_section
         # Derived from pool ID – must stay in sync with the user pool region
         self._cognito_logins_key = (
             f"cognito-idp.{AWS_REGION}.amazonaws.com/{cognito_user_pool_id}"
@@ -125,6 +136,7 @@ class ZephyrClient:
         self._aws_creds: dict[str, str] | None = None
         self._token_expiry: datetime.datetime | None = None
         self._session_cache: niquests.Session | None = None
+        self._auth_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Authentication
@@ -145,6 +157,12 @@ class ZephyrClient:
             session.mount("https://", _LaxSSLAdapter())
             self._session_cache = session
         return self._session_cache
+
+    def close(self) -> None:
+        """Close the cached HTTP session, if one has been created."""
+        if self._session_cache is not None:
+            self._session_cache.close()
+            self._session_cache = None
 
     def authenticate(self) -> None:
         """Authenticate with Cognito SRP and obtain temporary AWS credentials.
@@ -264,7 +282,7 @@ class ZephyrClient:
             power=int(data.get(STATE_POWER, 0)),
             light=int(data.get(STATE_LIGHT, 0)),
             fan=int(data.get(STATE_FAN, 0)),
-            is_online=bool(data.get(STATE_IS_ONLINE, False)),
+            is_online=self._parse_bool(data.get(STATE_IS_ONLINE, False)),
             raw=data,
         )
 
@@ -272,31 +290,62 @@ class ZephyrClient:
     # Device control (MQTT)
     # ------------------------------------------------------------------
 
-    def publish_shadow_update(self, thing_name: str, state: dict[str, Any]) -> None:
+    def publish_shadow_update(
+        self,
+        thing_name: str,
+        state: dict[str, Any],
+        timeout_s: int = 10,
+    ) -> None:
         """Publish an AWS IoT Device Shadow update to control the device.
 
-        Writes ``state`` into the shadow's ``reported`` section via MQTT.
-        AWS IoT syncs the shadow to the physical device; the device confirms
-        by echoing the values back.  A fresh MQTT-over-WebSocket connection
-        is opened, used, and torn down for each call.
+        Writes ``state`` into the configured shadow command section via MQTT
+        and waits for AWS IoT to accept or reject the update.  A fresh
+        MQTT-over-WebSocket connection is opened, used, and torn down for each
+        call.
 
         Args:
             thing_name: AWS IoT thing name that identifies the device.
-            state: Key/value pairs to write into the shadow's ``reported``
+            state: Key/value pairs to write into the configured shadow command
                 section (e.g. ``{"fan": 3, "light": 1}``).
+            timeout_s: Seconds to wait for the shadow update acknowledgement.
 
         Raises:
             ZephyrAuthError: If credentials are absent or cannot be refreshed.
-            ZephyrConnectionError: If the MQTT connection or publish fails.
+            ZephyrConnectionError: If the MQTT connection, publish, or shadow
+                acknowledgement fails.
         """
         self._ensure_authenticated()
-        assert self._aws_creds is not None
 
         conn = self._build_mqtt_connection()
+        ack_event = threading.Event()
+        ack: dict[str, Any] = {}
+
+        def _on_ack(topic: str, payload: bytes, **_kwargs: Any) -> None:
+            try:
+                data = json.loads(payload.decode("utf-8"))
+            except Exception:  # noqa: BLE001
+                data = {"raw": payload.decode("utf-8", errors="replace")}
+            ack["topic"] = topic
+            ack["payload"] = data
+            ack_event.set()
+
         try:
             conn.connect().result(timeout=15)
+            topic_accepted = TOPIC_UPDATE_ACCEPTED.format(thing=thing_name)
+            topic_rejected = TOPIC_UPDATE_REJECTED.format(thing=thing_name)
+            conn.subscribe(
+                topic=topic_accepted,
+                qos=mqtt.QoS.AT_LEAST_ONCE,
+                callback=_on_ack,
+            )[0].result(timeout=10)
+            conn.subscribe(
+                topic=topic_rejected,
+                qos=mqtt.QoS.AT_LEAST_ONCE,
+                callback=_on_ack,
+            )[0].result(timeout=10)
+
             payload = json.dumps(
-                {"state": {"reported": state}},
+                {"state": {self._shadow_command_section: state}},
                 separators=(",", ":"),
             ).encode("utf-8")
             topic = TOPIC_UPDATE.format(thing=thing_name)
@@ -304,12 +353,24 @@ class ZephyrClient:
                 topic=topic, payload=payload, qos=mqtt.QoS.AT_LEAST_ONCE
             )
             fut.result(timeout=10)
-            _LOGGER.debug(
-                "Shadow update for %s: %s",
+
+            self._raise_for_shadow_update_ack(
+                ack_event,
+                ack,
+                topic_rejected,
                 thing_name,
-                payload.decode(),
+                timeout_s,
+            )
+
+            _LOGGER.debug(
+                "Shadow %s-state update accepted for %s: %s",
+                self._shadow_command_section,
+                thing_name,
+                sorted(state),
             )
         except Exception as err:
+            if isinstance(err, ZephyrConnectionError):
+                raise
             raise ZephyrConnectionError(
                 f"MQTT publish failed for {thing_name}: {err}"
             ) from err
@@ -338,19 +399,18 @@ class ZephyrClient:
                 response does not arrive within ``timeout_s`` seconds.
         """
         self._ensure_authenticated()
-        assert self._aws_creds is not None
 
         conn = self._build_mqtt_connection()
         got: dict[str, Any] = {}
-        done = False
+        done = threading.Event()
 
         def _on_msg(_topic: str, payload: bytes, **_kwargs: Any) -> None:
-            nonlocal done, got
+            nonlocal got
             try:
                 got = json.loads(payload.decode("utf-8"))
             except Exception:  # noqa: BLE001
                 got = {"raw": payload.decode("utf-8", errors="replace")}
-            done = True
+            done.set()
 
         try:
             conn.connect().result(timeout=15)
@@ -366,9 +426,7 @@ class ZephyrClient:
             )
             fut.result(timeout=10)
 
-            start = time.time()
-            while not done and (time.time() - start) < timeout_s:
-                time.sleep(0.05)
+            done.wait(timeout_s)
         except Exception as err:
             raise ZephyrConnectionError(
                 f"MQTT get failed for {thing_name}: {err}"
@@ -377,7 +435,7 @@ class ZephyrClient:
             with contextlib.suppress(Exception):
                 conn.disconnect().result(timeout=10)
 
-        if not done:
+        if not done.is_set():
             raise ZephyrConnectionError(
                 f"Timed out waiting for shadow state from {thing_name}"
             )
@@ -389,12 +447,15 @@ class ZephyrClient:
 
     def _ensure_authenticated(self) -> None:
         """Re-authenticate if tokens are absent or within 5 minutes of expiry."""
-        now = datetime.datetime.now(tz=datetime.UTC)
-        expiring_soon = (
-            self._token_expiry is not None
-            and now >= self._token_expiry - datetime.timedelta(minutes=5)
-        )
-        if not self._id_token or not self._aws_creds or expiring_soon:
+        with self._auth_lock:
+            now = datetime.datetime.now(tz=datetime.UTC)
+            expiring_soon = (
+                self._token_expiry is not None
+                and now >= self._token_expiry - datetime.timedelta(minutes=5)
+            )
+            if self._id_token and self._aws_creds and not expiring_soon:
+                return
+
             _LOGGER.debug(
                 "Cognito credentials %s; re-authenticating",
                 "expiring soon" if expiring_soon else "not present",
@@ -414,6 +475,38 @@ class ZephyrClient:
             "authorization": self._id_token or "",
         }
 
+    @staticmethod
+    def _raise_for_shadow_update_ack(
+        ack_event: threading.Event,
+        ack: dict[str, Any],
+        topic_rejected: str,
+        thing_name: str,
+        timeout_s: int,
+    ) -> None:
+        """Raise when AWS IoT does not accept a shadow update."""
+        if not ack_event.wait(timeout_s):
+            raise ZephyrConnectionError(
+                f"Timed out waiting for shadow update acknowledgement from {thing_name}"
+            )
+        if ack.get("topic") == topic_rejected:
+            err_payload = ack.get("payload", {})
+            raise ZephyrConnectionError(
+                f"Shadow update rejected for {thing_name}: {err_payload}"
+            )
+
+    @staticmethod
+    def _parse_bool(value: Any) -> bool:
+        """Parse boolean-ish values returned by the Gemteks API."""
+        if isinstance(value, str):
+            return value.strip().lower() in {"1", "true", "yes", "on"}
+        return bool(value)
+
+    def _require_aws_credentials(self) -> dict[str, str]:
+        """Return current AWS credentials or raise a real runtime error."""
+        if self._aws_creds is None:
+            raise ZephyrAuthError("Missing AWS credentials; authentication is required")
+        return self._aws_creds
+
     def _build_mqtt_connection(self) -> mqtt.Connection:
         """Build a signed MQTT-over-WebSocket connection using current STS credentials.
 
@@ -423,21 +516,21 @@ class ZephyrClient:
         Returns:
             Configured but not yet connected MQTT connection.
         """
-        assert self._aws_creds is not None
+        aws_creds = self._require_aws_credentials()
         evg = io.EventLoopGroup(1)
         resolver = io.DefaultHostResolver(evg)
         bootstrap = io.ClientBootstrap(evg, resolver)
         provider = auth.AwsCredentialsProvider.new_static(
-            access_key_id=self._aws_creds["access_key"],
-            secret_access_key=self._aws_creds["secret_key"],
-            session_token=self._aws_creds["session_token"],
+            access_key_id=aws_creds["access_key"],
+            secret_access_key=aws_creds["secret_key"],
+            session_token=aws_creds["session_token"],
         )
         return mqtt_connection_builder.websockets_with_default_aws_signing(
             endpoint=self._iot_endpoint,
             region=AWS_REGION,
             credentials_provider=provider,
             client_bootstrap=bootstrap,
-            client_id=f"hass-zephyr-{int(time.time())}",
+            client_id=f"hass-zephyr-{uuid.uuid4().hex}",
             clean_session=True,
             keep_alive_secs=30,
         )

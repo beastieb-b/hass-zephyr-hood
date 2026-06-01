@@ -12,9 +12,35 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from . import ZephyrData
-from .const import CONF_PASSWORD, CONF_USERNAME
+from .const import (
+    CONF_MAC_ADDRESS,
+    CONF_PASSWORD,
+    CONF_SERIAL_NUMBER,
+    CONF_THING_NAME,
+    CONF_USERNAME,
+)
 
-TO_REDACT = {CONF_PASSWORD, CONF_USERNAME}
+TO_REDACT = {
+    CONF_MAC_ADDRESS,
+    CONF_PASSWORD,
+    CONF_SERIAL_NUMBER,
+    CONF_THING_NAME,
+    CONF_USERNAME,
+    "AccessKeyId",
+    "MAC",
+    "SN",
+    "SecretKey",
+    "SessionToken",
+    "access_key",
+    "authorization",
+    "id_token",
+    "mac",
+    "secret_key",
+    "serial",
+    "serialNumber",
+    "session_token",
+    "thingName",
+}
 
 
 async def async_get_config_entry_diagnostics(
@@ -35,7 +61,7 @@ async def async_get_config_entry_diagnostics(
                     "light": coordinator_data.light,
                     "fan": coordinator_data.fan,
                     "is_online": coordinator_data.is_online,
-                    "raw": coordinator_data.raw,
+                    "raw": async_redact_data(coordinator_data.raw, TO_REDACT),
                 }
                 if coordinator_data
                 else None

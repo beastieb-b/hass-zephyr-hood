@@ -6,6 +6,7 @@ from datetime import timedelta
 import logging
 from typing import Any
 
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -22,6 +23,7 @@ class ZephyrCoordinator(DataUpdateCoordinator[ZephyrDeviceState]):
     def __init__(
         self,
         hass: HomeAssistant,
+        config_entry: ConfigEntry,
         client: ZephyrClient,
         thing_name: str,
     ) -> None:
@@ -29,6 +31,7 @@ class ZephyrCoordinator(DataUpdateCoordinator[ZephyrDeviceState]):
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=config_entry,
             name=DOMAIN,
             update_interval=timedelta(seconds=SCAN_INTERVAL_SECONDS),
         )
