@@ -15,6 +15,7 @@
     "pycognito>=2024.5.1",
     "niquests>=3.18.4"
   ],
+  "homeassistant": "2024.4.0",
   "single_config_entry": false,
   "version": "1.0.0"
 }

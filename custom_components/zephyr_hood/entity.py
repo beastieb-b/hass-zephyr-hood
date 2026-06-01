@@ -29,7 +29,6 @@ class ZephyrEntity(CoordinatorEntity[ZephyrCoordinator]):
     def __init__(
         self,
         coordinator: ZephyrCoordinator,
-        config_entry_id: str,
     ) -> None:
         """Initialise the entity."""
         super().__init__(coordinator)

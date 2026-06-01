@@ -43,7 +43,7 @@ class ZephyrPowerSwitch(ZephyrEntity, SwitchEntity):
         config_entry_id: str,
     ) -> None:
         """Initialise the power switch entity."""
-        super().__init__(coordinator, config_entry_id)
+        super().__init__(coordinator)
         self._attr_unique_id = f"{config_entry_id}_power"
 
     @property

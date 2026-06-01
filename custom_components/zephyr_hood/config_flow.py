@@ -15,7 +15,7 @@ from homeassistant.config_entries import (
 )
 from homeassistant.core import callback
 
-from .api import ZephyrAuthError, ZephyrClient
+from .api import ZephyrApiError, ZephyrAuthError, ZephyrClient, ZephyrConnectionError
 from .const import (
     COGNITO_APP_CLIENT_ID,
     COGNITO_APP_CLIENT_SECRET,
@@ -86,7 +86,7 @@ class ZephyrConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
             except ZephyrAuthError:
                 errors["base"] = "invalid_auth"
-            except Exception:
+            except (ZephyrConnectionError, ZephyrApiError):
                 _LOGGER.exception("Unexpected error during Zephyr setup")
                 errors["base"] = "cannot_connect"
             else:
@@ -167,7 +167,7 @@ class ZephyrConfigFlow(ConfigFlow, domain=DOMAIN):
                 await self.hass.async_add_executor_job(client.authenticate)
             except ZephyrAuthError:
                 errors["base"] = "invalid_auth"
-            except Exception:
+            except (ZephyrConnectionError, ZephyrApiError):
                 _LOGGER.exception("Unexpected error during Zephyr reauth")
                 errors["base"] = "cannot_connect"
             else:
@@ -198,7 +198,7 @@ class ZephyrConfigFlow(ConfigFlow, domain=DOMAIN):
                 await self.hass.async_add_executor_job(client.authenticate)
             except ZephyrAuthError:
                 errors["base"] = "invalid_auth"
-            except Exception:
+            except (ZephyrConnectionError, ZephyrApiError):
                 _LOGGER.exception("Unexpected error during Zephyr reconfiguration")
                 errors["base"] = "cannot_connect"
             else:

@@ -50,7 +50,7 @@ class ZephyrFan(ZephyrEntity, FanEntity):
         config_entry_id: str,
     ) -> None:
         """Initialise the fan entity."""
-        super().__init__(coordinator, config_entry_id)
+        super().__init__(coordinator)
         self._attr_unique_id = f"{config_entry_id}_fan"
 
     # ------------------------------------------------------------------
@@ -85,7 +85,12 @@ class ZephyrFan(ZephyrEntity, FanEntity):
         **kwargs: Any,
     ) -> None:
         """Turn the fan on, optionally at a given preset speed."""
-        level = int(preset_mode) if preset_mode is not None else FAN_SPEED_MIN
+        if preset_mode is not None:
+            if preset_mode not in _PRESET_MODES:
+                raise ValueError(f"Invalid preset mode: {preset_mode}")
+            level = int(preset_mode)
+        else:
+            level = FAN_SPEED_MIN
         await self.coordinator.async_send_command({STATE_FAN: level})
 
     async def async_turn_off(self, **kwargs: Any) -> None:
