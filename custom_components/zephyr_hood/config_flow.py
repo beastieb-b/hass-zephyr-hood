@@ -102,15 +102,12 @@ class ZephyrConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=STEP_USER_SCHEMA,
             errors=errors,
-            description_placeholders={},
         )
 
     async def async_step_device(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Let the user choose which device to add when multiple are found."""
-        errors: dict[str, str] = {}
-
         device_map = {dev.thing_name: dev.model_name for dev in self._devices}
 
         if user_input is not None:
@@ -128,7 +125,6 @@ class ZephyrConfigFlow(ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_THING_NAME): vol.In(device_map),
                 }
             ),
-            errors=errors,
         )
 
     async def _create_entry(self, device: Any) -> ConfigFlowResult:

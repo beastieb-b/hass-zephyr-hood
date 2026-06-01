@@ -33,7 +33,6 @@ class ZephyrEntity(CoordinatorEntity[ZephyrCoordinator]):
     ) -> None:
         """Initialise the entity."""
         super().__init__(coordinator)
-        self._config_entry_id = config_entry_id
 
     @property
     def device_info(self) -> DeviceInfo:

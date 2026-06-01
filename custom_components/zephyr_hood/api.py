@@ -146,10 +146,12 @@ class ZephyrClient:
         self._session_cache: niquests.Session | None = None
         self._auth_lock = threading.Lock()
         self._session_lock = threading.Lock()
-        # CRT resources created once per client and reused across MQTT calls
-        self._mqtt_evg = io.EventLoopGroup(1)
-        self._mqtt_resolver = io.DefaultHostResolver(self._mqtt_evg)
-        self._mqtt_bootstrap = io.ClientBootstrap(self._mqtt_evg, self._mqtt_resolver)
+        self._mqtt_lock = threading.Lock()
+        # CRT resources lazy-initialised on first MQTT call so that short-lived
+        # config-flow clients (which only use REST) never create a CRT thread
+        self._mqtt_evg: io.EventLoopGroup | None = None
+        self._mqtt_resolver: io.DefaultHostResolver | None = None
+        self._mqtt_bootstrap: io.ClientBootstrap | None = None
 
     # ------------------------------------------------------------------
     # Authentication
@@ -173,10 +175,13 @@ class ZephyrClient:
             return self._session_cache
 
     def close(self) -> None:
-        """Close the cached HTTP session, if one has been created."""
+        """Close the HTTP session and release CRT MQTT resources."""
         if self._session_cache is not None:
             self._session_cache.close()
             self._session_cache = None
+        self._mqtt_bootstrap = None
+        self._mqtt_resolver = None
+        self._mqtt_evg = None
 
     def authenticate(self) -> None:
         """Authenticate with Cognito SRP and obtain temporary AWS credentials.
@@ -545,6 +550,18 @@ class ZephyrClient:
             raise ZephyrAuthError("Missing AWS credentials; authentication is required")
         return self._aws_creds
 
+    def _ensure_mqtt_infrastructure(self) -> None:
+        """Lazily create CRT event-loop resources on first MQTT use."""
+        if self._mqtt_bootstrap is not None:
+            return
+        with self._mqtt_lock:
+            if self._mqtt_bootstrap is None:
+                self._mqtt_evg = io.EventLoopGroup(1)
+                self._mqtt_resolver = io.DefaultHostResolver(self._mqtt_evg)
+                self._mqtt_bootstrap = io.ClientBootstrap(
+                    self._mqtt_evg, self._mqtt_resolver
+                )
+
     def _build_mqtt_connection(self) -> mqtt.Connection:
         """Build a signed MQTT-over-WebSocket connection using current STS credentials.
 
@@ -554,6 +571,7 @@ class ZephyrClient:
         Returns:
             Configured but not yet connected MQTT connection.
         """
+        self._ensure_mqtt_infrastructure()
         aws_creds = self._require_aws_credentials()
         provider = auth.AwsCredentialsProvider.new_static(
             access_key_id=aws_creds["access_key"],

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
+from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -35,7 +35,6 @@ class ZephyrPowerSwitch(ZephyrEntity, SwitchEntity):
     """
 
     _attr_name = "Power"
-    _attr_device_class = SwitchDeviceClass.SWITCH
     _attr_translation_key = "power"
 
     def __init__(
