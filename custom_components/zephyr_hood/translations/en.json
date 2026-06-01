@@ -60,7 +60,8 @@
           "cognito_user_pool_id": "Cognito User Pool ID",
           "cognito_client_id": "Cognito App Client ID",
           "cognito_client_secret": "Cognito App Client Secret",
-          "cognito_identity_pool_id": "Cognito Identity Pool ID"
+          "cognito_identity_pool_id": "Cognito Identity Pool ID",
+          "shadow_command_section": "Shadow command section"
         },
         "data_description": {
           "iot_endpoint": "AWS IoT Core hostname used for MQTT device control.",
@@ -68,7 +69,8 @@
           "cognito_user_pool_id": "AWS Cognito User Pool ID (e.g. us-west-2_XXXXXXXXX).",
           "cognito_client_id": "AWS Cognito App Client ID.",
           "cognito_client_secret": "AWS Cognito App Client Secret.",
-          "cognito_identity_pool_id": "AWS Cognito Identity Pool ID for obtaining temporary AWS credentials."
+          "cognito_identity_pool_id": "AWS Cognito Identity Pool ID for obtaining temporary AWS credentials.",
+          "shadow_command_section": "Shadow command section used to send device commands (reported or desired). Only change if your device does not respond to the default."
         }
       }
     }
