@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from typing import Any
 
 from homeassistant.components.fan import FanEntity, FanEntityFeature
@@ -16,6 +15,8 @@ from .coordinator import ZephyrCoordinator
 from .entity import ZephyrEntity
 
 PARALLEL_UPDATES = 1  # Silver: parallel-updates
+
+_PRESET_MODES = [str(i) for i in range(FAN_SPEED_MIN, FAN_SPEED_MAX + 1)]
 
 
 async def async_setup_entry(
@@ -31,16 +32,16 @@ async def async_setup_entry(
 class ZephyrFan(ZephyrEntity, FanEntity):
     """Fan entity representing the range hood exhaust fan.
 
-    Speed is a percentage (0-100) mapped to discrete levels 0-6.
-    Level 0 = off, levels 1-6 = increasing speed.
+    Speed is controlled via preset modes 1-6. Level 0 = off.
     """
 
     _attr_name = "Fan"
     _attr_supported_features = (
-        FanEntityFeature.SET_SPEED
+        FanEntityFeature.PRESET_MODE
         | FanEntityFeature.TURN_ON
         | FanEntityFeature.TURN_OFF
     )
+    _attr_preset_modes = _PRESET_MODES
     _attr_translation_key = "fan"
 
     def __init__(
@@ -64,19 +65,14 @@ class ZephyrFan(ZephyrEntity, FanEntity):
         return self.coordinator.data.fan > FAN_OFF
 
     @property
-    def percentage(self) -> int | None:
-        """Return current fan speed as a percentage."""
+    def preset_mode(self) -> str | None:
+        """Return current fan speed as a preset mode string."""
         if self.coordinator.data is None:
             return None
         level = self.coordinator.data.fan
         if level == FAN_OFF:
-            return 0
-        return round(level / FAN_SPEED_MAX * 100)
-
-    @property
-    def speed_count(self) -> int:
-        """Return the number of discrete speed steps."""
-        return FAN_SPEED_MAX
+            return None
+        return str(level)
 
     # ------------------------------------------------------------------
     # Commands
@@ -88,27 +84,14 @@ class ZephyrFan(ZephyrEntity, FanEntity):
         preset_mode: str | None = None,
         **kwargs: Any,
     ) -> None:
-        """Turn the fan on, optionally at a given speed percentage."""
-        if percentage is not None and percentage > 0:
-            level = max(
-                FAN_SPEED_MIN,
-                math.ceil(percentage / 100 * FAN_SPEED_MAX),
-            )
-        else:
-            level = FAN_SPEED_MIN
+        """Turn the fan on, optionally at a given preset speed."""
+        level = int(preset_mode) if preset_mode is not None else FAN_SPEED_MIN
         await self.coordinator.async_send_command({STATE_FAN: level})
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the fan off."""
         await self.coordinator.async_send_command({STATE_FAN: FAN_OFF})
 
-    async def async_set_percentage(self, percentage: int) -> None:
-        """Set the fan speed to a given percentage."""
-        if percentage == 0:
-            await self.async_turn_off()
-            return
-        level = max(
-            FAN_SPEED_MIN,
-            math.ceil(percentage / 100 * FAN_SPEED_MAX),
-        )
-        await self.coordinator.async_send_command({STATE_FAN: level})
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
+        """Set the fan speed to a given preset mode."""
+        await self.coordinator.async_send_command({STATE_FAN: int(preset_mode)})

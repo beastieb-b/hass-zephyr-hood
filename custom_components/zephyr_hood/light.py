@@ -81,7 +81,7 @@ class ZephyrLight(ZephyrEntity, LightEntity):
         """Turn the light on, optionally at a given brightness."""
         if ATTR_BRIGHTNESS in kwargs:
             raw = brightness_to_value(_BRIGHTNESS_SCALE, kwargs[ATTR_BRIGHTNESS])
-            level = max(LIGHT_LEVEL_MIN, round(raw))
+            level = min(LIGHT_LEVEL_MAX, max(LIGHT_LEVEL_MIN, round(raw)))
         else:
             # Default to full brightness when no level specified
             level = LIGHT_LEVEL_MAX

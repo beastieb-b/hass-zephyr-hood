@@ -39,7 +39,8 @@ class ZephyrEntity(CoordinatorEntity[ZephyrCoordinator]):
     def device_info(self) -> DeviceInfo:
         """Return device registry information for this entity."""
         entry = self.coordinator.config_entry  # type: ignore[attr-defined]
-        assert entry is not None
+        if entry is None:
+            raise RuntimeError("ZephyrEntity.device_info called before config_entry is set")
         return DeviceInfo(
             identifiers={(DOMAIN, entry.data[CONF_MAC_ADDRESS])},
             name=entry.title,
