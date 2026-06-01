@@ -29,8 +29,10 @@ from .const import (
     COGNITO_APP_CLIENT_SECRET,
     COGNITO_IDENTITY_POOL_ID,
     COGNITO_USER_POOL_ID,
+    FAN_SPEED_MAX,
     GEMTEKS_BASE_URL,
     IOT_ENDPOINT,
+    LIGHT_LEVEL_MAX,
     SHADOW_COMMAND_SECTION_REPORTED,
     SHADOW_COMMAND_SECTIONS,
     STATE_FAN,
@@ -97,6 +99,12 @@ class ZephyrDeviceState:
     is_online: bool
     raw: dict[str, Any]
 
+    def __post_init__(self) -> None:
+        """Clamp state values to their valid device ranges."""
+        self.power = max(0, min(1, self.power))
+        self.light = max(0, min(LIGHT_LEVEL_MAX, self.light))
+        self.fan = max(0, min(FAN_SPEED_MAX, self.fan))
+
 
 class ZephyrClient:
     """Unified API client – handles auth, device discovery and control."""
@@ -137,6 +145,11 @@ class ZephyrClient:
         self._token_expiry: datetime.datetime | None = None
         self._session_cache: niquests.Session | None = None
         self._auth_lock = threading.Lock()
+        self._session_lock = threading.Lock()
+        # CRT resources created once per client and reused across MQTT calls
+        self._mqtt_evg = io.EventLoopGroup(1)
+        self._mqtt_resolver = io.DefaultHostResolver(self._mqtt_evg)
+        self._mqtt_bootstrap = io.ClientBootstrap(self._mqtt_evg, self._mqtt_resolver)
 
     # ------------------------------------------------------------------
     # Authentication
@@ -152,11 +165,12 @@ class ZephyrClient:
         Returns:
             Shared session mounted with the lax-SSL adapter.
         """
-        if self._session_cache is None:
-            session = niquests.Session()
-            session.mount("https://", _LaxSSLAdapter())
-            self._session_cache = session
-        return self._session_cache
+        with self._session_lock:
+            if self._session_cache is None:
+                session = niquests.Session()
+                session.mount("https://", _LaxSSLAdapter())
+                self._session_cache = session
+            return self._session_cache
 
     def close(self) -> None:
         """Close the cached HTTP session, if one has been created."""
@@ -238,15 +252,23 @@ class ZephyrClient:
         except niquests.RequestException as err:
             raise ZephyrApiError(f"Failed to list devices: {err}") from err
 
-        return [
-            ZephyrDeviceInfo(
-                thing_name=dev["thingName"],
-                model_name=dev.get(STATE_MODEL_NAME, ""),
-                serial_number=dev.get("SN", ""),
-                mac_address=dev.get("MAC", ""),
+        devices = []
+        for dev in resp.json().get("devices", []):
+            thing_name = dev.get("thingName")
+            if not thing_name:
+                _LOGGER.warning(
+                    "Skipping device with missing thingName: %s", list(dev.keys())
+                )
+                continue
+            devices.append(
+                ZephyrDeviceInfo(
+                    thing_name=thing_name,
+                    model_name=dev.get(STATE_MODEL_NAME, ""),
+                    serial_number=dev.get("SN", ""),
+                    mac_address=dev.get("MAC", ""),
+                )
             )
-            for dev in resp.json().get("devices", [])
-        ]
+        return devices
 
     def get_device_state(self, thing_name: str) -> ZephyrDeviceState:
         """Fetch current device state via the Gemteks REST API.
@@ -278,13 +300,18 @@ class ZephyrClient:
             ) from err
 
         data = resp.json()
-        return ZephyrDeviceState(
-            power=int(data.get(STATE_POWER, 0)),
-            light=int(data.get(STATE_LIGHT, 0)),
-            fan=int(data.get(STATE_FAN, 0)),
-            is_online=self._parse_bool(data.get(STATE_IS_ONLINE, False)),
-            raw=data,
-        )
+        try:
+            return ZephyrDeviceState(
+                power=int(data.get(STATE_POWER, 0)),
+                light=int(data.get(STATE_LIGHT, 0)),
+                fan=int(data.get(STATE_FAN, 0)),
+                is_online=self._parse_bool(data.get(STATE_IS_ONLINE, False)),
+                raw=data,
+            )
+        except (ValueError, TypeError) as err:
+            raise ZephyrApiError(
+                f"Unexpected device state format from {thing_name}: {err}"
+            ) from err
 
     # ------------------------------------------------------------------
     # Device control (MQTT)
@@ -447,6 +474,18 @@ class ZephyrClient:
 
     def _ensure_authenticated(self) -> None:
         """Re-authenticate if tokens are absent or within 5 minutes of expiry."""
+        # Fast path: skip lock acquisition when credentials are valid
+        now = datetime.datetime.now(tz=datetime.UTC)
+        if self._id_token and self._aws_creds:
+            expiring_soon = (
+                self._token_expiry is not None
+                and now >= self._token_expiry - datetime.timedelta(minutes=5)
+            )
+            if not expiring_soon:
+                return
+
+        # Slow path: acquire lock and recheck before making network calls so
+        # concurrent callers don't each trigger a full re-auth round-trip
         with self._auth_lock:
             now = datetime.datetime.now(tz=datetime.UTC)
             expiring_soon = (
@@ -455,7 +494,6 @@ class ZephyrClient:
             )
             if self._id_token and self._aws_creds and not expiring_soon:
                 return
-
             _LOGGER.debug(
                 "Cognito credentials %s; re-authenticating",
                 "expiring soon" if expiring_soon else "not present",
@@ -517,9 +555,6 @@ class ZephyrClient:
             Configured but not yet connected MQTT connection.
         """
         aws_creds = self._require_aws_credentials()
-        evg = io.EventLoopGroup(1)
-        resolver = io.DefaultHostResolver(evg)
-        bootstrap = io.ClientBootstrap(evg, resolver)
         provider = auth.AwsCredentialsProvider.new_static(
             access_key_id=aws_creds["access_key"],
             secret_access_key=aws_creds["secret_key"],
@@ -529,7 +564,7 @@ class ZephyrClient:
             endpoint=self._iot_endpoint,
             region=AWS_REGION,
             credentials_provider=provider,
-            client_bootstrap=bootstrap,
+            client_bootstrap=self._mqtt_bootstrap,
             client_id=f"hass-zephyr-{uuid.uuid4().hex}",
             clean_session=True,
             keep_alive_secs=30,
