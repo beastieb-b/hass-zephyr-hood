@@ -18,6 +18,10 @@ power entities.
 
 ## Installation
 
+Requires Home Assistant 2026.3.2 or newer. Development and testing target
+Python 3.14, which is bundled with current Home Assistant releases in that
+range.
+
 ### HACS (recommended)
 
 1. In HACS, go to **Integrations** → three-dot menu → **Custom repositories**
@@ -28,7 +32,8 @@ power entities.
 ### Manual
 
 1. Copy `custom_components/zephyr_hood/` into your HA config's `custom_components/` folder
-2. Restart Home Assistant
+2. Make sure your Home Assistant version is 2026.3.2 or newer
+3. Restart Home Assistant
 
 ## Configuration
 
@@ -41,7 +46,8 @@ power entities.
 
 The integration authenticates with AWS Cognito using your Zephyr credentials, then connects to
 AWS IoT over MQTT (WebSockets) to publish and subscribe to your hood's device shadow. State
-updates from the app or physical controls are reflected in HA in real time.
+changes from Home Assistant commands are published immediately. Updates from the Zephyr app or
+physical controls are picked up by Home Assistant on the normal cloud polling cycle.
 
 ## Development
 
