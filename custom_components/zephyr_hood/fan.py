@@ -24,7 +24,7 @@ def _percentage_to_speed(percentage: int) -> int:
     """Map a 1-100 HA percentage to a Zephyr speed level 1-6.
 
     Uses ceiling so that any non-zero percentage results in at least speed 1.
-    Examples: 1%→1, 17%→1, 18%→2, 33%→2, 34%→3, 50%→3, 51%→4, 67%→4,
+    Examples: 1%→1, 16%→1, 17%→2, 33%→2, 34%→3, 50%→3, 51%→4, 67%→4,
               68%→5, 83%→5, 84%→6, 100%→6.
     """
     return min(
@@ -121,7 +121,11 @@ class ZephyrFan(ZephyrEntity, FanEntity):
         preset_mode: str | None = None,
         **kwargs: Any,
     ) -> None:
-        """Turn the fan on, optionally at a given preset or percentage speed."""
+        """Turn the fan on, optionally at a given preset or percentage speed.
+
+        percentage=0 is treated as speed 1 (minimum), not off.  Use
+        async_turn_off or async_set_percentage(0) to stop the fan.
+        """
         if preset_mode is not None:
             if preset_mode not in _PRESET_MODES:
                 raise ValueError(f"Invalid preset mode: {preset_mode}")
