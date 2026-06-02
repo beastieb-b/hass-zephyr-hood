@@ -352,11 +352,18 @@ class ZephyrClient:
         ack_event = threading.Event()
         ack: dict[str, Any] = {}
 
+        client_token = uuid.uuid4().hex[:8]
+
         def _on_ack(topic: str, payload: bytes, **_kwargs: Any) -> None:
             try:
                 data = json.loads(payload.decode("utf-8"))
             except Exception:  # noqa: BLE001
                 data = {"raw": payload.decode("utf-8", errors="replace")}
+            # Ignore acks that belong to a concurrent update (e.g. from the
+            # Zephyr app) by checking the clientToken we embedded in the
+            # request payload.  AWS IoT echoes it back in the ack.
+            if data.get("clientToken") != client_token:
+                return
             ack["topic"] = topic
             ack["payload"] = data
             ack_event.set()
@@ -377,7 +384,10 @@ class ZephyrClient:
             )[0].result(timeout=10)
 
             payload = json.dumps(
-                {"state": {self._shadow_command_section: state}},
+                {
+                    "state": {self._shadow_command_section: state},
+                    "clientToken": client_token,
+                },
                 separators=(",", ":"),
             ).encode("utf-8")
             topic = TOPIC_UPDATE.format(thing=thing_name)
