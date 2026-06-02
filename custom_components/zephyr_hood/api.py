@@ -40,8 +40,6 @@ from .const import (
     STATE_LIGHT,
     STATE_MODEL_NAME,
     STATE_POWER,
-    TOPIC_GET,
-    TOPIC_GET_ACCEPTED,
     TOPIC_UPDATE,
     TOPIC_UPDATE_ACCEPTED,
     TOPIC_UPDATE_REJECTED,
@@ -419,69 +417,6 @@ class ZephyrClient:
         finally:
             with contextlib.suppress(Exception):
                 conn.disconnect().result(timeout=10)
-
-    def get_shadow_state(self, thing_name: str, timeout_s: int = 5) -> dict[str, Any]:
-        """Get current device shadow state via MQTT.
-
-        More real-time than the REST poll: subscribes to the
-        ``shadow/get/accepted`` topic, publishes an empty message to
-        ``shadow/get`` to trigger AWS to respond, then waits for the reply.
-
-        Args:
-            thing_name: AWS IoT thing name that identifies the device.
-            timeout_s: Seconds to wait for the shadow response before raising
-                a ``ZephyrConnectionError``.
-
-        Returns:
-            Parsed shadow document returned by AWS IoT.
-
-        Raises:
-            ZephyrAuthError: If credentials are absent or cannot be refreshed.
-            ZephyrConnectionError: If the MQTT subscribe/get fails or the
-                response does not arrive within ``timeout_s`` seconds.
-        """
-        self._ensure_authenticated()
-
-        conn = self._build_mqtt_connection()
-        got: dict[str, Any] = {}
-        done = threading.Event()
-
-        def _on_msg(_topic: str, payload: bytes, **_kwargs: Any) -> None:
-            nonlocal got
-            try:
-                got = json.loads(payload.decode("utf-8"))
-            except Exception:  # noqa: BLE001
-                got = {"raw": payload.decode("utf-8", errors="replace")}
-            done.set()
-
-        try:
-            conn.connect().result(timeout=15)
-            topic_accepted = TOPIC_GET_ACCEPTED.format(thing=thing_name)
-            topic_get = TOPIC_GET.format(thing=thing_name)
-            conn.subscribe(
-                topic=topic_accepted,
-                qos=mqtt.QoS.AT_LEAST_ONCE,
-                callback=_on_msg,
-            )[0].result(timeout=10)
-            fut, _ = conn.publish(
-                topic=topic_get, payload=b"{}", qos=mqtt.QoS.AT_LEAST_ONCE
-            )
-            fut.result(timeout=10)
-
-            done.wait(timeout_s)
-        except Exception as err:
-            raise ZephyrConnectionError(
-                f"MQTT get failed for {thing_name}: {err}"
-            ) from err
-        finally:
-            with contextlib.suppress(Exception):
-                conn.disconnect().result(timeout=10)
-
-        if not done.is_set():
-            raise ZephyrConnectionError(
-                f"Timed out waiting for shadow state from {thing_name}"
-            )
-        return got
 
     # ------------------------------------------------------------------
     # Internal helpers

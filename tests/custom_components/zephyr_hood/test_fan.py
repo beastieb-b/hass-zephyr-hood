@@ -126,3 +126,62 @@ async def test_fan_set_percentage(hass, mock_config_entry, mock_zephyr_client):
     call_args = mock_zephyr_client.publish_shadow_update.call_args
     # 50% of 6 = 3
     assert call_args[0][1]["fan"] == 3
+
+
+async def test_fan_turn_on_with_preset_mode(
+    hass, mock_config_entry, mock_zephyr_client
+):
+    """Calling turn_on with preset_mode sets the correct speed."""
+    await _setup_integration(hass, mock_config_entry, mock_zephyr_client)
+    fan_entities = hass.states.async_entity_ids(FAN_DOMAIN)
+
+    await hass.services.async_call(
+        FAN_DOMAIN,
+        SERVICE_TURN_ON,
+        {ATTR_ENTITY_ID: fan_entities[0], "preset_mode": "4"},
+        blocking=True,
+    )
+
+    call_args = mock_zephyr_client.publish_shadow_update.call_args
+    assert call_args[0][1]["fan"] == 4
+
+
+async def test_fan_turn_on_percentage_zero_uses_min_speed(
+    hass, mock_config_entry, mock_zephyr_client
+):
+    """turn_on(percentage=0) should turn on at speed 1, not off.
+
+    HA allows percentage=0 on turn_on; the FanEntity convention is that this
+    means 'on at minimum speed', not off.  Use set_percentage(0) to turn off.
+    """
+    await _setup_integration(hass, mock_config_entry, mock_zephyr_client)
+    fan_entities = hass.states.async_entity_ids(FAN_DOMAIN)
+
+    await hass.services.async_call(
+        FAN_DOMAIN,
+        SERVICE_TURN_ON,
+        {ATTR_ENTITY_ID: fan_entities[0], ATTR_PERCENTAGE: 0},
+        blocking=True,
+    )
+
+    call_args = mock_zephyr_client.publish_shadow_update.call_args
+    # percentage=0 → speed 1 (minimum), NOT off
+    assert call_args[0][1]["fan"] == 1
+
+
+async def test_fan_set_percentage_zero_turns_off(
+    hass, mock_config_entry, mock_zephyr_client
+):
+    """set_percentage(0) should turn the fan off (fan=0)."""
+    await _setup_integration(hass, mock_config_entry, mock_zephyr_client)
+    fan_entities = hass.states.async_entity_ids(FAN_DOMAIN)
+
+    await hass.services.async_call(
+        FAN_DOMAIN,
+        SERVICE_SET_PERCENTAGE,
+        {ATTR_ENTITY_ID: fan_entities[0], ATTR_PERCENTAGE: 0},
+        blocking=True,
+    )
+
+    call_args = mock_zephyr_client.publish_shadow_update.call_args
+    assert call_args[0][1]["fan"] == 0

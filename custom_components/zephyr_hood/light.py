@@ -70,7 +70,7 @@ class ZephyrLight(ZephyrEntity, LightEntity):
             return None
         level = self.coordinator.data.light
         if level == LIGHT_OFF:
-            return 0
+            return None
         return value_to_brightness(_BRIGHTNESS_SCALE, level)
 
     # ------------------------------------------------------------------

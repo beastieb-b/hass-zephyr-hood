@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from custom_components.zephyr_hood.api import ZephyrAuthError
-from custom_components.zephyr_hood.const import DOMAIN
+from custom_components.zephyr_hood.api import ZephyrAuthError, ZephyrDeviceInfo
+from custom_components.zephyr_hood.const import CONF_PASSWORD, CONF_USERNAME, DOMAIN
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
 
@@ -187,3 +187,54 @@ async def test_reconfigure_flow_success(
 
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "reconfigure_successful"
+
+
+async def test_user_step_multiple_devices(
+    hass, mock_zephyr_client, mock_device_info, mock_username, mock_password
+):
+    """When multiple devices are found, the user is prompted to choose one."""
+    second_device = ZephyrDeviceInfo(
+        thing_name="second_thing",
+        model_name="ZZ9999XX",
+        serial_number="9999999ZZZ",
+        mac_address="AA:BB:CC:DD:EE:FF",
+    )
+    mock_zephyr_client.get_devices.return_value = [mock_device_info, second_device]
+
+    with patch(
+        "custom_components.zephyr_hood.config_flow.ZephyrClient",
+        return_value=mock_zephyr_client,
+    ):
+        result = await hass.config_entries.flow.async_init(
+            "zephyr_hood", context={"source": "user"}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_USERNAME: mock_username, CONF_PASSWORD: mock_password},
+        )
+
+    # Should advance to device selection step
+    assert result["type"] == "form"
+    assert result["step_id"] == "device"
+
+
+async def test_options_flow(hass, mock_config_entry, mock_zephyr_client):
+    """Options flow presents a form with backend override fields."""
+    mock_config_entry.add_to_hass(hass)
+    with (
+        patch(
+            "custom_components.zephyr_hood.ZephyrClient",
+            return_value=mock_zephyr_client,
+        ),
+        patch(
+            "custom_components.zephyr_hood.coordinator.ZephyrCoordinator"
+            "._async_update_data",
+            return_value=mock_zephyr_client.get_device_state.return_value,
+        ),
+    ):
+        await hass.config_entries.async_setup(mock_config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "init"

@@ -32,6 +32,11 @@ class ZephyrPowerSwitch(ZephyrEntity, SwitchEntity):
 
     When the hood is powered off, the fan and light are also turned off
     by the hardware.  This switch controls the hood power state (0/1).
+
+    Note: because the integration uses cloud polling (30-second interval),
+    fan and light entities may continue to show their previous state for up
+    to 30 seconds after power is switched off.  This is expected behaviour
+    and not a bug.
     """
 
     _attr_name = "Power"
