@@ -83,7 +83,7 @@ def mock_config_entry(hass):
         title=f"Zephyr {MOCK_MODEL} ({MOCK_SERIAL})",
         data=MOCK_CONFIG_ENTRY_DATA,
         entry_id="test_entry_id",
-        unique_id=MOCK_THING_NAME,
+        unique_id=MOCK_MAC,
     )
 
 
