@@ -277,7 +277,9 @@ class ZephyrClient:
         try:
             body = resp.json()
         except (ValueError, TypeError) as err:
-            raise ZephyrApiError(f"Invalid JSON in device list response: {err}") from err
+            raise ZephyrApiError(
+                f"Invalid JSON in device list response: {err}"
+            ) from err
 
         devices = []
         for dev in body.get("devices", []) or []:
