@@ -11,7 +11,13 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import ZephyrApiError, ZephyrAuthError, ZephyrClient, ZephyrConnectionError, ZephyrDeviceState
+from .api import (
+    ZephyrApiError,
+    ZephyrAuthError,
+    ZephyrClient,
+    ZephyrConnectionError,
+    ZephyrDeviceState,
+)
 from .const import DOMAIN, SCAN_INTERVAL_SECONDS
 
 _LOGGER = logging.getLogger(__name__)
