@@ -22,5 +22,5 @@
     "niquests>=3.18.4"
   ],
   "single_config_entry": false,
-  "version": "1.0.0"
+  "version": "1.0.1"
 }
