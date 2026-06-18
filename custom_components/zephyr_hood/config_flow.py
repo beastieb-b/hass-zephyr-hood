@@ -86,7 +86,7 @@ class ZephyrConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
             except ZephyrAuthError:
                 errors["base"] = "invalid_auth"
-            except (ZephyrConnectionError, ZephyrApiError):
+            except ZephyrConnectionError, ZephyrApiError:
                 _LOGGER.exception("Unexpected error during Zephyr setup")
                 errors["base"] = "cannot_connect"
             else:
@@ -169,7 +169,7 @@ class ZephyrConfigFlow(ConfigFlow, domain=DOMAIN):
                 await self.hass.async_add_executor_job(client.authenticate)
             except ZephyrAuthError:
                 errors["base"] = "invalid_auth"
-            except (ZephyrConnectionError, ZephyrApiError):
+            except ZephyrConnectionError, ZephyrApiError:
                 _LOGGER.exception("Unexpected error during Zephyr reauth")
                 errors["base"] = "cannot_connect"
             else:
@@ -202,7 +202,7 @@ class ZephyrConfigFlow(ConfigFlow, domain=DOMAIN):
                 await self.hass.async_add_executor_job(client.authenticate)
             except ZephyrAuthError:
                 errors["base"] = "invalid_auth"
-            except (ZephyrConnectionError, ZephyrApiError):
+            except ZephyrConnectionError, ZephyrApiError:
                 _LOGGER.exception("Unexpected error during Zephyr reconfiguration")
                 errors["base"] = "cannot_connect"
             else:

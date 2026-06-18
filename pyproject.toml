@@ -3,7 +3,7 @@ name = "hass-zephyr-hood"
 version = "0.1.0"
 description = "Home Assistant custom component for Zephyr range hoods"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14.2"
 dependencies = []
 
 [dependency-groups]
@@ -46,10 +46,6 @@ ignore_errors = true
 
 [tool.ruff]
 required-version = ">=0.15.6"
-# Target 3.13 so the formatter keeps parenthesised multi-exception
-# `except (A, B):` clauses. The unparenthesised form is only valid on
-# Python 3.14+ (PEP 758); Home Assistant may still run on 3.13.
-target-version = "py313"
 
 [tool.ruff.lint]
 select = [
