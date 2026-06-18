@@ -34,15 +34,11 @@ GEMTEKS_BASE_URL = "https://zephyr-prod-app.gemteks.com/prod"
 TOPIC_UPDATE = "$aws/things/{thing}/shadow/update"
 TOPIC_UPDATE_ACCEPTED = "$aws/things/{thing}/shadow/update/accepted"
 TOPIC_UPDATE_REJECTED = "$aws/things/{thing}/shadow/update/rejected"
-TOPIC_GET = "$aws/things/{thing}/shadow/get"
-TOPIC_GET_ACCEPTED = "$aws/things/{thing}/shadow/get/accepted"
-TOPIC_UPDATE_DOCS = "$aws/things/{thing}/shadow/update/documents"
 
 # Device state keys (as used by the MQTT shadow)
 STATE_POWER = "power"
 STATE_LIGHT = "light"
 STATE_FAN = "fan"
-STATE_DELAY_TIMER = "setdelaytimer"
 STATE_IS_ONLINE = "isOnline"
 STATE_MODEL_NAME = "modelName"
 
@@ -65,11 +61,6 @@ LIGHT_LEVEL_MAX = 3
 FAN_OFF = 0
 FAN_SPEED_MIN = 1
 FAN_SPEED_MAX = 6
-
-# Delay timer choices (seconds) — reserved for future delay-off feature
-DELAY_TIMER_OFF = 0
-DELAY_TIMER_5_MIN = 300
-DELAY_TIMER_10_MIN = 600
 
 # Polling interval
 SCAN_INTERVAL_SECONDS = 30
