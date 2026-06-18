@@ -8,10 +8,10 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .api import ZephyrApiError, ZephyrAuthError, ZephyrClient, ZephyrDeviceState
+from .api import ZephyrApiError, ZephyrAuthError, ZephyrClient, ZephyrConnectionError, ZephyrDeviceState
 from .const import DOMAIN, SCAN_INTERVAL_SECONDS
 
 _LOGGER = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ class ZephyrCoordinator(DataUpdateCoordinator[ZephyrDeviceState]):
             raise ConfigEntryAuthFailed(
                 f"Authentication expired for Zephyr device {self.thing_name}: {err}"
             ) from err
-        except ZephyrApiError as err:
+        except (ZephyrConnectionError, ZephyrApiError) as err:
             raise UpdateFailed(
                 f"Error communicating with Zephyr API for {self.thing_name}: {err}"
             ) from err
@@ -74,6 +74,8 @@ class ZephyrCoordinator(DataUpdateCoordinator[ZephyrDeviceState]):
                 self.thing_name,
                 err,
             )
-            raise
+            raise HomeAssistantError(
+                f"Failed to send command to Zephyr device: {err}"
+            ) from err
 
         await self.async_request_refresh()

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from typing import Any
 
 from homeassistant.components.fan import FanEntity, FanEntityFeature
@@ -23,12 +22,13 @@ _PRESET_MODES = [str(i) for i in range(FAN_SPEED_MIN, FAN_SPEED_MAX + 1)]
 def _percentage_to_speed(percentage: int) -> int:
     """Map a 1-100 HA percentage to a Zephyr speed level 1-6.
 
-    Uses ceiling so that any non-zero percentage results in at least speed 1.
-    Examples: 1%→1, 16%→1, 17%→2, 33%→2, 34%→3, 50%→3, 51%→4, 67%→4,
-              68%→5, 83%→5, 84%→6, 100%→6.
+    Uses rounding for a consistent round-trip with _speed_to_percentage.
+    The max(FAN_SPEED_MIN, ...) clamp ensures percentages near 0 still
+    produce at least speed 1 (callers guarantee percentage >= 1).
+    Examples: 1%→1, 17%→1, 33%→2, 50%→3, 67%→4, 83%→5, 100%→6.
     """
     return min(
-        FAN_SPEED_MAX, max(FAN_SPEED_MIN, math.ceil(percentage / 100 * FAN_SPEED_MAX))
+        FAN_SPEED_MAX, max(FAN_SPEED_MIN, round(percentage / 100 * FAN_SPEED_MAX))
     )
 
 

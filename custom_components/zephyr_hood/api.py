@@ -19,6 +19,7 @@ import uuid
 from awscrt import auth, io, mqtt
 from awsiot import mqtt_connection_builder
 import boto3
+import botocore.exceptions
 import niquests
 from niquests.adapters import HTTPAdapter
 from pycognito import Cognito
@@ -190,8 +191,10 @@ class ZephyrClient:
         timestamp is stored for proactive renewal by ``_ensure_authenticated``.
 
         Raises:
-            ZephyrAuthError: If the Cognito or STS exchange fails for any
-                reason.
+            ZephyrConnectionError: If a network error prevents reaching
+                the Cognito or STS endpoints (triggers ConfigEntryNotReady).
+            ZephyrAuthError: If the credentials are invalid or the STS
+                exchange fails for a non-network reason.
         """
         try:
             cognito = Cognito(
@@ -203,6 +206,14 @@ class ZephyrClient:
             )
             cognito.authenticate(password=self._password)
             self._id_token = cognito.id_token
+        except (
+            botocore.exceptions.EndpointConnectionError,
+            botocore.exceptions.ConnectTimeoutError,
+            botocore.exceptions.ReadTimeoutError,
+        ) as err:
+            raise ZephyrConnectionError(
+                f"Network error connecting to Cognito for {self._username}: {err}"
+            ) from err
         except Exception as err:
             raise ZephyrAuthError(
                 f"Authentication failed for {self._username}: {err}"
@@ -226,6 +237,14 @@ class ZephyrClient:
             # boto3 returns a timezone-aware datetime; store it so we can
             # proactively refresh before it expires.
             self._token_expiry = creds.get("Expiration")
+        except (
+            botocore.exceptions.EndpointConnectionError,
+            botocore.exceptions.ConnectTimeoutError,
+            botocore.exceptions.ReadTimeoutError,
+        ) as err:
+            raise ZephyrConnectionError(
+                f"Network error obtaining AWS credentials: {err}"
+            ) from err
         except Exception as err:
             raise ZephyrAuthError(f"Failed to obtain AWS credentials: {err}") from err
 
@@ -255,8 +274,13 @@ class ZephyrClient:
         except niquests.RequestException as err:
             raise ZephyrApiError(f"Failed to list devices: {err}") from err
 
+        try:
+            body = resp.json()
+        except (ValueError, TypeError) as err:
+            raise ZephyrApiError(f"Invalid JSON in device list response: {err}") from err
+
         devices = []
-        for dev in resp.json().get("devices", []):
+        for dev in body.get("devices", []) or []:
             thing_name = dev.get("thingName")
             if not thing_name:
                 _LOGGER.warning(
@@ -302,8 +326,8 @@ class ZephyrClient:
                 f"Failed to get device state for {thing_name}: {err}"
             ) from err
 
-        data = resp.json()
         try:
+            data = resp.json()
             return ZephyrDeviceState(
                 power=int(data.get(STATE_POWER, 0)),
                 light=int(data.get(STATE_LIGHT, 0)),

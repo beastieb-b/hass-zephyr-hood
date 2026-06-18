@@ -75,11 +75,11 @@ class ZephyrConfigFlow(ConfigFlow, domain=DOMAIN):
             self._username = user_input[CONF_USERNAME]
             self._password = user_input[CONF_PASSWORD]
 
+            client = ZephyrClient(
+                username=self._username,
+                password=self._password,
+            )
             try:
-                client = ZephyrClient(
-                    username=self._username,
-                    password=self._password,
-                )
                 await self.hass.async_add_executor_job(client.authenticate)
                 self._devices = await self.hass.async_add_executor_job(
                     client.get_devices
@@ -97,6 +97,8 @@ class ZephyrConfigFlow(ConfigFlow, domain=DOMAIN):
                     return await self._create_entry(self._devices[0])
                 else:
                     return await self.async_step_device()
+            finally:
+                await self.hass.async_add_executor_job(client.close)
 
         return self.async_show_form(
             step_id="user",
@@ -159,11 +161,11 @@ class ZephyrConfigFlow(ConfigFlow, domain=DOMAIN):
         reauth_entry = self._get_reauth_entry()
 
         if user_input is not None:
+            client = ZephyrClient(
+                username=reauth_entry.data[CONF_USERNAME],
+                password=user_input[CONF_PASSWORD],
+            )
             try:
-                client = ZephyrClient(
-                    username=reauth_entry.data[CONF_USERNAME],
-                    password=user_input[CONF_PASSWORD],
-                )
                 await self.hass.async_add_executor_job(client.authenticate)
             except ZephyrAuthError:
                 errors["base"] = "invalid_auth"
@@ -175,6 +177,8 @@ class ZephyrConfigFlow(ConfigFlow, domain=DOMAIN):
                     reauth_entry,
                     data_updates={CONF_PASSWORD: user_input[CONF_PASSWORD]},
                 )
+            finally:
+                await self.hass.async_add_executor_job(client.close)
 
         return self.async_show_form(
             step_id="reauth_confirm",
@@ -190,11 +194,11 @@ class ZephyrConfigFlow(ConfigFlow, domain=DOMAIN):
         reconfigure_entry = self._get_reconfigure_entry()
 
         if user_input is not None:
+            client = ZephyrClient(
+                username=user_input[CONF_USERNAME],
+                password=user_input[CONF_PASSWORD],
+            )
             try:
-                client = ZephyrClient(
-                    username=user_input[CONF_USERNAME],
-                    password=user_input[CONF_PASSWORD],
-                )
                 await self.hass.async_add_executor_job(client.authenticate)
             except ZephyrAuthError:
                 errors["base"] = "invalid_auth"
@@ -209,6 +213,8 @@ class ZephyrConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_PASSWORD: user_input[CONF_PASSWORD],
                     },
                 )
+            finally:
+                await self.hass.async_add_executor_job(client.close)
 
         return self.async_show_form(
             step_id="reconfigure",
